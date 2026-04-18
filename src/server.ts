@@ -1,0 +1,34 @@
+import { Redis } from 'ioredis';
+import { Pool } from 'pg';
+import { config } from './config';
+import { loadRoutes, startRoutePolling } from './route_loader';
+import { createApp } from './app';
+
+async function start(): Promise<void> {
+  const redis = new Redis({
+    host: config.redis.host,
+    port: config.redis.port,
+  });
+
+  const pool = new Pool({
+    host:     config.postgres.host,
+    port:     config.postgres.port,
+    user:     config.postgres.user,
+    password: config.postgres.password,
+    database: config.postgres.database,
+  });
+
+  await loadRoutes(pool);
+  startRoutePolling(pool);
+
+  const app = createApp(redis, pool);
+
+  app.listen(config.port, () => {
+    console.log(`[rate-limiter] running on port ${config.port}`);
+  });
+}
+
+start().catch(err => {
+  console.error('[server] failed to start:', err);
+  process.exit(1);
+});
