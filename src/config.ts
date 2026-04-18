@@ -1,3 +1,9 @@
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
+}
+
 function optional(name: string, defaultValue: string): string {
   return process.env[name] ?? defaultValue;
 }
@@ -11,12 +17,17 @@ export const config = {
   },
 
   postgres: {
-    host:     optional('POSTGRES_HOST', 'localhost'),
+    host:     optional('POSTGRES_HOST',   'localhost'),
     port:     parseInt(optional('POSTGRES_PORT', '5432'), 10),
-    user:     optional('POSTGRES_USER', 'postgres'),
-    password: optional('POSTGRES_PASSWORD', 'postgres'),
-    database: optional('POSTGRES_DB', 'hf_platform'),
+    user:     required('POSTGRES_USER'),
+    password: required('POSTGRES_PASSWORD'),
+    database: optional('POSTGRES_DB',     'hf_platform'),
   },
 
-  upstreamConfigPath: optional('UPSTREAM_CONFIG_PATH', './config/routes.yaml'),
+  aws: {
+    region:      optional('AWS_REGION',       'us-east-1'),
+    endpointUrl: optional('AWS_ENDPOINT_URL', ''),
+    topicArn:    required('SNS_TOPIC_ARN'),
+    queueUrl:    required('SQS_QUEUE_URL'),
+  },
 };

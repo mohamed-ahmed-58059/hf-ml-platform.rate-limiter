@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import { ClientId } from './client_id';
 import { Policy, PolicyNotFoundError, resolvePolicy } from './policy_resolver';
 
-const FREE_TIER: Policy = { capacity: 25, refillPerSec: 0.3333 };
+const FREE_TIER: Policy = { capacity: 25, refillPerSec: 0.3333, version: 0 };
 
 const IN_MEMORY_TTL_MS = 2_000;
 const REDIS_TTL_SECONDS = 1_800;
@@ -39,12 +39,21 @@ function writeMemory(key: string, policy: Policy): void {
 
 async function readRedis(redis: Redis, key: string): Promise<Policy | undefined> {
   const raw = await redis.hgetall(`policy:${key}`);
-  if (!raw.capacity || !raw.refillPerSec) return undefined;
-  return { capacity: parseFloat(raw.capacity), refillPerSec: parseFloat(raw.refillPerSec) };
+  if (!raw.capacity || !raw.refillPerSec || !raw.version) return undefined;
+  return {
+    capacity:     parseFloat(raw.capacity),
+    refillPerSec: parseFloat(raw.refillPerSec),
+    version:      parseInt(raw.version, 10),
+  };
 }
 
 async function writeRedis(redis: Redis, key: string, policy: Policy): Promise<void> {
-  await redis.hset(`policy:${key}`, 'capacity', policy.capacity, 'refillPerSec', policy.refillPerSec);
+  await redis.hset(
+    `policy:${key}`,
+    'capacity',     policy.capacity,
+    'refillPerSec', policy.refillPerSec,
+    'version',      policy.version,
+  );
   await redis.expire(`policy:${key}`, REDIS_TTL_SECONDS);
 }
 

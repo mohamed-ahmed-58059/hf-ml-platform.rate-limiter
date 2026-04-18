@@ -4,6 +4,7 @@ import { ClientId } from './client_id';
 export interface Policy {
   capacity: number;
   refillPerSec: number;
+  version: number;
 }
 
 export class PolicyNotFoundError extends Error {
@@ -14,13 +15,14 @@ export class PolicyNotFoundError extends Error {
 }
 
 export async function resolvePolicy(pool: Pool, clientId: ClientId, endpoint: string): Promise<Policy> {
-  let row: { capacity: number; refill_per_sec: number } | undefined;
+  let row: { capacity: number; refill_per_sec: number; version: number } | undefined;
 
   if (clientId.type === 'api-key') {
-    const result = await pool.query<{ capacity: number; refill_per_sec: number }>(
+    const result = await pool.query<{ capacity: number; refill_per_sec: number; version: number }>(
       `SELECT
          COALESCE(te.capacity,       t.capacity)       AS capacity,
-         COALESCE(te.refill_per_sec, t.refill_per_sec) AS refill_per_sec
+         COALESCE(te.refill_per_sec, t.refill_per_sec) AS refill_per_sec,
+         t.version
        FROM api_keys ak
        JOIN tiers t ON ak.tier = t.id
        LEFT JOIN tier_endpoints te ON te.tier_id = t.id AND te.endpoint = $2
@@ -30,10 +32,11 @@ export async function resolvePolicy(pool: Pool, clientId: ClientId, endpoint: st
     row = result.rows[0];
 
   } else if (clientId.type === 'user-jwt') {
-    const result = await pool.query<{ capacity: number; refill_per_sec: number }>(
+    const result = await pool.query<{ capacity: number; refill_per_sec: number; version: number }>(
       `SELECT
          COALESCE(te.capacity,       t.capacity)       AS capacity,
-         COALESCE(te.refill_per_sec, t.refill_per_sec) AS refill_per_sec
+         COALESCE(te.refill_per_sec, t.refill_per_sec) AS refill_per_sec,
+         t.version
        FROM users u
        JOIN tiers t ON u.default_tier = t.id
        LEFT JOIN tier_endpoints te ON te.tier_id = t.id AND te.endpoint = $2
@@ -43,10 +46,11 @@ export async function resolvePolicy(pool: Pool, clientId: ClientId, endpoint: st
     row = result.rows[0];
 
   } else if (clientId.type === 'service-jwt') {
-    const result = await pool.query<{ capacity: number; refill_per_sec: number }>(
+    const result = await pool.query<{ capacity: number; refill_per_sec: number; version: number }>(
       `SELECT
          COALESCE(te.capacity,       t.capacity)       AS capacity,
-         COALESCE(te.refill_per_sec, t.refill_per_sec) AS refill_per_sec
+         COALESCE(te.refill_per_sec, t.refill_per_sec) AS refill_per_sec,
+         t.version
        FROM service_clients sc
        JOIN tiers t ON sc.tier = t.id
        LEFT JOIN tier_endpoints te ON te.tier_id = t.id AND te.endpoint = $2
@@ -62,5 +66,5 @@ export async function resolvePolicy(pool: Pool, clientId: ClientId, endpoint: st
 
   if (!row) throw new PolicyNotFoundError(clientId);
 
-  return { capacity: row.capacity, refillPerSec: Number(row.refill_per_sec) };
+  return { capacity: row.capacity, refillPerSec: Number(row.refill_per_sec), version: row.version };
 }
