@@ -3,6 +3,7 @@ import { Pool } from 'pg';
 import { config } from './config';
 import { loadRoutes, startRoutePolling } from './route_loader';
 import { createApp } from './app';
+import { startCacheInvalidator } from './cache_invalidator';
 
 async function start(): Promise<void> {
   const redis = new Redis({
@@ -25,6 +26,11 @@ async function start(): Promise<void> {
 
   app.listen(config.port, () => {
     console.log(`[rate-limiter] running on port ${config.port}`);
+    startCacheInvalidator(redis, {
+      queueUrl:    config.aws.queueUrl,
+      region:      config.aws.region,
+      endpointUrl: config.aws.endpointUrl || undefined,
+    });
   });
 }
 

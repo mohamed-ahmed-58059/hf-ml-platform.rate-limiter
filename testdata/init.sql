@@ -4,17 +4,18 @@ CREATE TABLE tiers (
     name             VARCHAR(20)    NOT NULL UNIQUE,
     capacity         INTEGER        NOT NULL,
     refill_per_sec   NUMERIC(10, 4) NOT NULL,
-    requests_per_min INTEGER        NOT NULL
+    requests_per_min INTEGER        NOT NULL,
+    version          INTEGER        NOT NULL DEFAULT 1
 );
 
-INSERT INTO tiers (id, name, capacity, refill_per_sec, requests_per_min) VALUES
-    ('c0000000-0000-0000-0000-000000000001', 'free',               25,    0.3333,  20),
-    ('c0000000-0000-0000-0000-000000000002', 'basic',              120,   1.6667,  100),
-    ('c0000000-0000-0000-0000-000000000003', 'premium',            600,   8.3333,  500),
-    ('c0000000-0000-0000-0000-000000000004', 'internal-low',       300,   4.1667,  250),
-    ('c0000000-0000-0000-0000-000000000005', 'internal-standard',  1200,  16.6667, 1000),
-    ('c0000000-0000-0000-0000-000000000006', 'internal-high',      6000,  83.3333, 5000),
-    ('c0000000-0000-0000-0000-000000000007', 'internal-unlimited', 99999, 9999.0,  99999);
+INSERT INTO tiers (id, name, capacity, refill_per_sec, requests_per_min, version) VALUES
+    ('c0000000-0000-0000-0000-000000000001', 'free',               25,    0.3333,  20,    1),
+    ('c0000000-0000-0000-0000-000000000002', 'basic',              120,   1.6667,  100,   1),
+    ('c0000000-0000-0000-0000-000000000003', 'premium',            600,   8.3333,  500,   1),
+    ('c0000000-0000-0000-0000-000000000004', 'internal-low',       300,   4.1667,  250,   1),
+    ('c0000000-0000-0000-0000-000000000005', 'internal-standard',  1200,  16.6667, 1000,  1),
+    ('c0000000-0000-0000-0000-000000000006', 'internal-high',      6000,  83.3333, 5000,  1),
+    ('c0000000-0000-0000-0000-000000000007', 'internal-unlimited', 99999, 9999.0,  99999, 1);
 
 
 -- Routes
