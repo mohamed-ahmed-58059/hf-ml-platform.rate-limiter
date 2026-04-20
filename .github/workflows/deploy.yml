@@ -79,14 +79,14 @@ jobs:
 
       - name: Update task definition with new image
         id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@4225e0b507142a2e432b018bc3ccb728559b334c # v1.6.2
+        uses: aws-actions/amazon-ecs-render-task-definition@77954e213ba1f9f9cb016b86a1d4f6fcdea0d57e # v1.8.4
         with:
           task-definition: task-definition.json
           container-name: rate-limiter
           image: ${{ steps.build-image.outputs.image }}
 
       - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@3d43d0e17a7c4d3a87de1ccc54da3d7b049a52ab # v2.3.1
+        uses: aws-actions/amazon-ecs-deploy-task-definition@fc8fc60f3a60ffd500fcb13b209c59d221ac8c8c # v2.6.1
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: hf-ml-platform-rate-limiter
