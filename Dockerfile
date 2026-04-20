@@ -7,7 +7,6 @@ RUN npm ci
 
 COPY tsconfig.json ./
 COPY src ./src
-COPY config ./config
 
 RUN npm run build
 
@@ -20,7 +19,6 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/config ./config
 
 ENV NODE_ENV=production
 
