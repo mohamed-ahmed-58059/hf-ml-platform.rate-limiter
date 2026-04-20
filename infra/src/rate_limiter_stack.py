@@ -32,10 +32,26 @@ class RateLimiterStack(cdk.Stack):
             ],
         )
 
+        vpc = ec2.Vpc.from_vpc_attributes(
+            self,
+            "ImportedVpc",
+            vpc_id=cdk.Fn.import_value("HfMlPlatformVpcId"),
+            availability_zones=["us-east-1a", "us-east-1b"],
+            public_subnet_ids=[
+                cdk.Fn.import_value("HfMlPlatformPublicSubnetId1"),
+                cdk.Fn.import_value("HfMlPlatformPublicSubnetId2"),
+            ],
+            private_subnet_ids=[
+                cdk.Fn.import_value("HfMlPlatformPrivateSubnetId1"),
+                cdk.Fn.import_value("HfMlPlatformPrivateSubnetId2"),
+            ],
+        )
+
         self.cluster = ecs.Cluster(
             self,
             "Cluster",
             cluster_name="hf-ml-platform-rate-limiter",
+            vpc=vpc,
             enable_fargate_capacity_providers=True,
         )
 
@@ -82,21 +98,6 @@ class RateLimiterStack(cdk.Stack):
                     f"arn:aws:sqs:us-east-1:{self.account}:hf-ml-platform-cache-invalidation"
                 ],
             )
-        )
-
-        vpc = ec2.Vpc.from_vpc_attributes(
-            self,
-            "ImportedVpc",
-            vpc_id=cdk.Fn.import_value("HfMlPlatformVpcId"),
-            availability_zones=["us-east-1a", "us-east-1b"],
-            public_subnet_ids=[
-                cdk.Fn.import_value("HfMlPlatformPublicSubnetId1"),
-                cdk.Fn.import_value("HfMlPlatformPublicSubnetId2"),
-            ],
-            private_subnet_ids=[
-                cdk.Fn.import_value("HfMlPlatformPrivateSubnetId1"),
-                cdk.Fn.import_value("HfMlPlatformPrivateSubnetId2"),
-            ],
         )
 
         sg_alb = ec2.SecurityGroup(
