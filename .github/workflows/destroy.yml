@@ -42,18 +42,6 @@ jobs:
         working-directory: infra
         run: pip install -r requirements.txt
 
-      - name: Empty ECR repository
-        run: |
-          IMAGE_IDS=$(aws ecr list-images \
-            --repository-name hf-ml-platform/rate-limiter \
-            --query 'imageIds[*]' \
-            --output json 2>/dev/null || echo "[]")
-          if [ "$IMAGE_IDS" != "[]" ] && [ -n "$IMAGE_IDS" ]; then
-            aws ecr batch-delete-image \
-              --repository-name hf-ml-platform/rate-limiter \
-              --image-ids "$IMAGE_IDS"
-          fi
-
       - name: Destroy CDK stack
         working-directory: infra
         env:

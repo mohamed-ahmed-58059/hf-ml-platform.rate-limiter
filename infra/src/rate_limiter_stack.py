@@ -22,6 +22,8 @@ class RateLimiterStack(cdk.Stack):
             "RateLimiterRepo",
             repository_name="hf-ml-platform/rate-limiter",
             image_scan_on_push=True,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+            empty_on_delete=True,
             lifecycle_rules=[
                 ecr.LifecycleRule(
                     description="Keep last 5 images",
