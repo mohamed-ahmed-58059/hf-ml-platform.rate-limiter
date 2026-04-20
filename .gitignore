@@ -137,3 +137,12 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# CDK infra
+infra/.tox/
+infra/.venv/
+infra/cdk.out/
+infra/.ruff_cache/
+infra/__pycache__/
+infra/**/__pycache__/
+infra/*.egg-info/
