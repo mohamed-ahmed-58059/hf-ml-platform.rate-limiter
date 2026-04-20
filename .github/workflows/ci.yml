@@ -11,7 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  ci:
+  app:
+    name: App (TypeScript)
     if: |
       github.repository == 'mohamed-ahmed-58059/hf-ml-platform.rate-limiter' &&
       github.actor == 'mohamed-ahmed-58059'
@@ -37,3 +38,39 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  infra:
+    name: Infra (CDK)
+    if: |
+      github.repository == 'mohamed-ahmed-58059/hf-ml-platform.rate-limiter' &&
+      github.actor == 'mohamed-ahmed-58059'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Run lint and tests
+        working-directory: infra
+        run: tox
+
+      - name: Install dependencies
+        working-directory: infra
+        run: pip install -r requirements.txt
+
+      - name: Validate CDK stack
+        working-directory: infra
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: cdk synth --context branch="$BRANCH_NAME"
