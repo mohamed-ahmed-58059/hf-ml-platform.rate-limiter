@@ -15,6 +15,7 @@ class RateLimiterStack(cdk.Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         branch = self.node.try_get_context("branch") or "unknown"
+        image_tag = self.node.try_get_context("image_tag") or "latest"
 
         ecr.Repository(
             self,
@@ -214,7 +215,7 @@ class RateLimiterStack(cdk.Stack):
                 ecr.Repository.from_repository_name(
                     self, "Repo", "hf-ml-platform/rate-limiter"
                 ),
-                tag="latest",
+                tag=image_tag,
             ),
             port_mappings=[
                 ecs.PortMapping(container_port=3000, name="http")
