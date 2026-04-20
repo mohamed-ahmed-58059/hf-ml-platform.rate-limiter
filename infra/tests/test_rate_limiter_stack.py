@@ -46,6 +46,7 @@ class TestRateLimiterStack(unittest.TestCase):
         self.template.has_resource_properties(
             "AWS::ECS::TaskDefinition",
             {
+                "Family": "hf-ml-platform-rate-limiter",
                 "Cpu": "256",
                 "Memory": "512",
                 "RequiresCompatibilities": ["FARGATE"],

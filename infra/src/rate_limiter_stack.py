@@ -15,7 +15,6 @@ class RateLimiterStack(cdk.Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         branch = self.node.try_get_context("branch") or "unknown"
-        image_tag = self.node.try_get_context("image_tag") or "latest"
 
         ecr.Repository(
             self,
@@ -176,6 +175,7 @@ class RateLimiterStack(cdk.Stack):
             port=8080,
             protocol=elbv2.ApplicationProtocol.HTTP,
             default_target_groups=[target_group],
+            open=False,
         )
 
         log_group = logs.LogGroup(
@@ -205,6 +205,7 @@ class RateLimiterStack(cdk.Stack):
         task_def = ecs.FargateTaskDefinition(
             self,
             "TaskDef",
+            family="hf-ml-platform-rate-limiter",
             cpu=256,
             memory_limit_mib=512,
             execution_role=execution_role,
@@ -214,12 +215,7 @@ class RateLimiterStack(cdk.Stack):
         task_def.add_container(
             "RateLimiter",
             container_name="rate-limiter",
-            image=ecs.ContainerImage.from_ecr_repository(
-                ecr.Repository.from_repository_name(
-                    self, "Repo", "hf-ml-platform/rate-limiter"
-                ),
-                tag=image_tag,
-            ),
+            image=ecs.ContainerImage.from_registry("public.ecr.aws/nginx/nginx:latest"),
             port_mappings=[
                 ecs.PortMapping(container_port=3000, name="http")
             ],

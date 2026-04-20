@@ -8,8 +8,8 @@ permissions:
   contents: read
 
 jobs:
-  infra:
-    name: Deploy Infra
+  deploy:
+    name: Deploy
     if: |
       github.repository == 'mohamed-ahmed-58059/hf-ml-platform.rate-limiter' &&
       github.actor == 'mohamed-ahmed-58059'
@@ -35,6 +35,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
+          cache: npm
 
       - name: Install CDK CLI
         run: npm install -g aws-cdk
@@ -49,31 +50,6 @@ jobs:
           BRANCH_NAME: ${{ github.ref_name }}
         run: cdk deploy --require-approval never --context branch="$BRANCH_NAME"
 
-  image:
-    name: Build and Deploy Image
-    needs: infra
-    if: |
-      github.repository == 'mohamed-ahmed-58059/hf-ml-platform.rate-limiter' &&
-      github.actor == 'mohamed-ahmed-58059'
-    environment: production
-    timeout-minutes: 30
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "22"
-          cache: npm
-
       - name: Install app dependencies
         run: npm ci
 
@@ -85,36 +61,34 @@ jobs:
         uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
 
       - name: Build and push Docker image
+        id: build-image
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           REPOSITORY: hf-ml-platform/rate-limiter
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-          docker tag $REGISTRY/$REPOSITORY:$IMAGE_TAG $REGISTRY/$REPOSITORY:latest
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-          docker push $REGISTRY/$REPOSITORY:latest
+          echo "image=$REGISTRY/$REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition hf-ml-platform-rate-limiter \
+            --query taskDefinition > task-definition.json
+
+      - name: Update task definition with new image
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@4225e0b507142a2e432b018bc3ccb728559b334c # v1.6.2
         with:
-          python-version: "3.12"
+          task-definition: task-definition.json
+          container-name: rate-limiter
+          image: ${{ steps.build-image.outputs.image }}
 
-      - name: Set up Node.js (CDK)
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@3d43d0e17a7c4d3a87de1ccc54da3d7b049a52ab # v2.3.1
         with:
-          node-version: "22"
-
-      - name: Install CDK CLI
-        run: npm install -g aws-cdk
-
-      - name: Install CDK dependencies
-        working-directory: infra
-        run: pip install -r requirements.txt
-
-      - name: Deploy CDK stack (image tag)
-        working-directory: infra
-        env:
-          BRANCH_NAME: ${{ github.ref_name }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: cdk deploy --require-approval never --context branch="$BRANCH_NAME" --context image_tag="$IMAGE_TAG"
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: hf-ml-platform-rate-limiter
+          cluster: hf-ml-platform-rate-limiter
+          wait-for-service-stability: true
