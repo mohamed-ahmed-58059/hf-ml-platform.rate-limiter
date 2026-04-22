@@ -17,6 +17,7 @@ async function start(): Promise<void> {
     user:     config.postgres.user,
     password: config.postgres.password,
     database: config.postgres.database,
+    ssl:      { rejectUnauthorized: false },
   });
 
   await loadRoutes(pool);
