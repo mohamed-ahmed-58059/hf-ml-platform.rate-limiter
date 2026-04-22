@@ -40,7 +40,7 @@ jobs:
         run: npm run lint
 
   infra:
-    name: Infra (CloudFormation)
+    name: Infra (CDK)
     if: |
       github.repository == 'mohamed-ahmed-58059/hf-ml-platform.rate-limiter' &&
       github.actor == 'mohamed-ahmed-58059'
@@ -56,8 +56,25 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
 
-      - name: Validate ECR stack
-        run: |
-          aws cloudformation validate-template \
-            --template-body file://infra/ecr.yml \
-            --region us-east-1
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Run lint and tests
+        working-directory: infra
+        run: tox
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: pip install -r requirements.txt
+
+      - name: Validate CDK stack
+        working-directory: infra
+        run: cdk synth
