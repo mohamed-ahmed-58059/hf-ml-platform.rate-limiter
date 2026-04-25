@@ -26,7 +26,7 @@ export async function resolvePolicy(pool: Pool, clientId: ClientId, endpoint: st
        FROM api_keys ak
        JOIN tiers t ON ak.tier = t.id
        LEFT JOIN tier_endpoints te ON te.tier_id = t.id AND te.endpoint = $2
-       WHERE ak.key_hash = sha256($1::bytea) AND ak.status = 'active'`,
+       WHERE ak.key_hash = decode($1, 'hex') AND ak.status = 'active'`,
       [clientId.id, endpoint]
     );
     row = result.rows[0];

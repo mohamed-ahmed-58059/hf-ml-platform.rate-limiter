@@ -9,7 +9,8 @@ function optional(name: string, defaultValue: string): string {
 }
 
 export const config = {
-  port: parseInt(optional('PORT', '3000'), 10),
+  port:              parseInt(optional('PORT', '3000'), 10),
+  trustedProxyHops: parseInt(optional('TRUSTED_PROXY_HOPS', '1'), 10),
 
   redis: {
     host: optional('REDIS_HOST', 'localhost'),
@@ -22,6 +23,7 @@ export const config = {
     user:     required('POSTGRES_USER'),
     password: required('POSTGRES_PASSWORD'),
     database: optional('POSTGRES_DB',     'hf_platform'),
+    ssl:      optional('POSTGRES_SSL', 'true') === 'true',
   },
 
   aws: {

@@ -1,5 +1,10 @@
 import { getClientId } from './client_id';
 import { Request } from 'express';
+import { createHash } from 'crypto';
+
+function sha256Hex(input: string): string {
+  return createHash('sha256').update(input).digest('hex');
+}
 
 function makeReq(overrides: object): Request {
   return {
@@ -17,9 +22,12 @@ function makeJwt(payload: object): string {
 }
 
 describe('getClientId', () => {
-  it('returns api-key type when X-API-Key header is present', () => {
+  it('returns api-key type with SHA-256 hash of the raw key', () => {
     const req = makeReq({ headers: { 'x-api-key': 'test-key-premium-alice' } });
-    expect(getClientId(req)).toEqual({ type: 'api-key', id: 'test-key-premium-alice' });
+    expect(getClientId(req)).toEqual({
+      type: 'api-key',
+      id: sha256Hex('test-key-premium-alice'),
+    });
   });
 
   it('returns user-jwt type when Bearer JWT has sid claim', () => {
@@ -63,7 +71,10 @@ describe('getClientId', () => {
         authorization: `Bearer ${token}`,
       },
     });
-    expect(getClientId(req)).toEqual({ type: 'api-key', id: 'test-key-premium-alice' });
+    expect(getClientId(req)).toEqual({
+      type: 'api-key',
+      id: sha256Hex('test-key-premium-alice'),
+    });
   });
 
   it('prefers Authorization header JWT over cookie JWT', () => {

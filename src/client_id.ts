@@ -1,11 +1,17 @@
 import { Request } from 'express';
+import { createHash } from 'crypto';
+import { config } from './config';
 
 export type ClientId =
-  | { type: 'api-key';     id: string }
+  | { type: 'api-key';     id: string }  // SHA-256 hex of raw key — never the raw key itself
   | { type: 'user-jwt';    id: string }  // JWT with sid claim (user session)
   | { type: 'service-jwt'; id: string }  // JWT without sid claim (service token)
   | { type: 'ip';          id: string }
   | { type: 'unknown';     id: string }
+
+function sha256Hex(input: string): string {
+  return createHash('sha256').update(input).digest('hex');
+}
 
 function decodeJwt(token: string): { sub: string; hasSid: boolean } {
   const parts = token.split('.');
@@ -16,10 +22,10 @@ function decodeJwt(token: string): { sub: string; hasSid: boolean } {
 }
 
 export function getClientId(req: Request): ClientId {
-  // 1. API key
+  // 1. API key — never store the raw key in cache keys / bucket keys / logs
   const apiKey = req.headers['x-api-key'];
   if (typeof apiKey === 'string' && apiKey.length > 0) {
-    return { type: 'api-key', id: apiKey };
+    return { type: 'api-key', id: sha256Hex(apiKey) };
   }
 
   // 2. Authorization: Bearer <jwt>
@@ -40,11 +46,16 @@ export function getClientId(req: Request): ClientId {
     }
   } catch { /* fall through to next option */ }
 
-  // 4. X-Forwarded-For — use last IP (ALB always appends real client IP last)
+  // 4. X-Forwarded-For — skip the trusted proxies appended in front of us.
+  // Each hop (CloudFront, ALB) appends one IP. TRUSTED_PROXY_HOPS=1 = ALB only;
+  // 2 = CloudFront + ALB. Anything before that is client-controlled and untrustworthy.
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.length > 0) {
-    const ips = forwarded.split(',').map(ip => ip.trim());
-    return { type: 'ip', id: ips[ips.length - 1] };
+    const ips = forwarded.split(',').map(ip => ip.trim()).filter(Boolean);
+    const hops = config.trustedProxyHops;
+    const idx = ips.length - hops;
+    const clientIp = idx >= 0 ? ips[idx] : ips[0];
+    if (clientIp) return { type: 'ip', id: clientIp };
   }
 
   // 5. Fallback — unknown clients share a single bucket and rate limit each other

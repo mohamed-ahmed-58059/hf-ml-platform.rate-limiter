@@ -8,6 +8,16 @@ import { matchEndpoint } from './route_table';
 
 export function rateLimitMiddleware(redis: Redis, pool: Pool) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+
+    const rawPath = req.url.split('?')[0];
+    if (
+      req.path.toLowerCase().startsWith('/internal/') &&
+      !rawPath.toLowerCase().startsWith('/internal/')
+    ) {
+      res.status(404).json({ error: 'not found' });
+      return;
+    }
+
     const clientId  = getClientId(req);
     const endpoint  = matchEndpoint(req.path);
     const policy    = await getPolicy(redis, pool, clientId, endpoint);

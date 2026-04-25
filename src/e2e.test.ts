@@ -10,6 +10,11 @@ import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers
 import { createApp } from './app';
 import { clearMemoryCache } from './policy_cache';
 import { updateRoutes } from './route_table';
+import { createHash } from 'crypto';
+
+function sha256Hex(input: string): string {
+  return createHash('sha256').update(input).digest('hex');
+}
 
 type App = ReturnType<typeof createApp>;
 
@@ -197,7 +202,7 @@ it('policy is written to Redis with endpoint in the key', async () => {
     .get('/v1/downstream/hello')
     .set('X-API-Key', 'test-key-free-carol');
 
-  const cached = await redis.hgetall('policy:api-key:test-key-free-carol:/v1/downstream');
+  const cached = await redis.hgetall(`policy:api-key:${sha256Hex('test-key-free-carol')}:/v1/downstream`);
   expect(cached.capacity).toBe('10');
   expect(cached.refillPerSec).toBe('0.1667');
 });
@@ -207,6 +212,6 @@ it('token bucket key includes the matched endpoint', async () => {
     .get('/v1/downstream/hello')
     .set('X-API-Key', 'test-key-free-carol');
 
-  const bucket = await redis.hgetall('tb:test-key-free-carol:/v1/downstream');
+  const bucket = await redis.hgetall(`tb:${sha256Hex('test-key-free-carol')}:/v1/downstream`);
   expect(bucket.tokens).toBeDefined();
 });
