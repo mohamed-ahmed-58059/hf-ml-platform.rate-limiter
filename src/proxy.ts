@@ -5,7 +5,7 @@ import { findUpstream } from './route_table';
 export function registerProxy(app: Application): void {
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (!findUpstream(req.path)) {
-      res.status(404).json({ error: `no route configured for ${req.path}` });
+      res.status(404).json({ error: 'not found' });
       return;
     }
     next();
@@ -16,6 +16,9 @@ export function registerProxy(app: Application): void {
       target: 'http://placeholder',
       router: (req: Request) => findUpstream(req.path)!,
       changeOrigin: true,
+      pathRewrite: (path) => path.replace(/^\/internal/, ''),
+      proxyTimeout: 30_000,
+      timeout: 30_000,
     })
   );
 }

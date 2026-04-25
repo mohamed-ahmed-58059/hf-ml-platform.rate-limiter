@@ -1,4 +1,5 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import { Redis } from 'ioredis';
 import { Pool } from 'pg';
 import { registerProxy } from './proxy';
@@ -11,6 +12,7 @@ export function createApp(redis: Redis, pool: Pool): express.Application {
     res.json({ status: 'ok' });
   });
 
+  app.use(cookieParser());
   app.use(rateLimitMiddleware(redis, pool));
   registerProxy(app);
 

@@ -70,3 +70,12 @@ jobs:
       - name: Deploy ECS stack
         working-directory: infra
         run: cdk deploy HfMlPlatformRateLimiterEcsStack --require-approval never --context image_tag=${{ github.sha }}
+
+      - name: Print CloudFront domain
+        run: |
+          DOMAIN=$(aws cloudformation describe-stacks \
+            --stack-name HfMlPlatformRateLimiterEcsStack \
+            --region us-east-1 \
+            --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDomain'].OutputValue" \
+            --output text)
+          echo "Public endpoint: https://$DOMAIN"

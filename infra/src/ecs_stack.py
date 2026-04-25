@@ -1,4 +1,6 @@
 import aws_cdk as cdk
+import aws_cdk.aws_cloudfront as cloudfront
+import aws_cdk.aws_cloudfront_origins as cloudfront_origins
 import aws_cdk.aws_ec2 as ec2
 import aws_cdk.aws_ecr as ecr
 import aws_cdk.aws_ecs as ecs
@@ -8,6 +10,10 @@ import aws_cdk.aws_logs as logs
 import aws_cdk.aws_secretsmanager as secretsmanager
 import aws_cdk.aws_ssm as ssm
 from constructs import Construct
+
+# AWS-managed prefix list for CloudFront origin-facing IPs (us-east-1).
+# Updated by AWS automatically as CloudFront edge IPs change.
+CLOUDFRONT_ORIGIN_PREFIX_LIST_ID = "pl-3b927c52"
 
 
 class EcsStack(cdk.Stack):
@@ -49,9 +55,9 @@ class EcsStack(cdk.Stack):
         )
 
         sg_alb.add_ingress_rule(
-            peer=ec2.Peer.any_ipv4(),
+            peer=ec2.Peer.prefix_list(CLOUDFRONT_ORIGIN_PREFIX_LIST_ID),
             connection=ec2.Port.tcp(80),
-            description="Allow HTTP from internet",
+            description="Allow HTTP from CloudFront origin-facing IPs only",
         )
 
         sg_alb.add_ingress_rule(
@@ -193,6 +199,7 @@ class EcsStack(cdk.Stack):
             environment={
                 "NODE_ENV": "production",
                 "PORT": "3000",
+                "TRUSTED_PROXY_HOPS": "2",
                 "AWS_REGION": "us-east-1",
                 "POSTGRES_DB": "hf_platform",
                 "REDIS_HOST": ssm.StringParameter.value_for_string_parameter(
@@ -250,11 +257,22 @@ class EcsStack(cdk.Stack):
 
         self.service.attach_to_application_target_group(self.target_group)
 
-        self.alb.add_listener(
+        external_listener = self.alb.add_listener(
             "ExternalListener",
             port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
             default_target_groups=[self.target_group],
+        )
+
+        external_listener.add_action(
+            "BlockInternalPaths",
+            priority=1,
+            conditions=[elbv2.ListenerCondition.path_patterns(["/internal/*"])],
+            action=elbv2.ListenerAction.fixed_response(
+                status_code=404,
+                content_type="application/json",
+                message_body='{"error":"not found"}',
+            ),
         )
 
         self.alb.add_listener(
@@ -263,4 +281,34 @@ class EcsStack(cdk.Stack):
             protocol=elbv2.ApplicationProtocol.HTTP,
             default_target_groups=[self.target_group],
             open=False,
+        )
+
+        # ── CloudFront ──────────────────────────────────────────────────────
+        # TLS termination for the public listener using the default
+        # *.cloudfront.net certificate. ALB security group is locked to the
+        # CloudFront origin-facing prefix list, so only CloudFront can reach
+        # port 80. The internal ALB listener on 8080 stays VPC-only.
+
+        self.distribution = cloudfront.Distribution(
+            self,
+            "Distribution",
+            comment="hf-ml-platform rate limiter",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=cloudfront_origins.LoadBalancerV2Origin(
+                    self.alb,
+                    protocol_policy=cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+                    http_port=80,
+                ),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+                cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+                origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER,
+            ),
+        )
+
+        cdk.CfnOutput(
+            self,
+            "CloudFrontDomain",
+            value=self.distribution.distribution_domain_name,
+            description="Public HTTPS endpoint for the rate limiter",
         )
