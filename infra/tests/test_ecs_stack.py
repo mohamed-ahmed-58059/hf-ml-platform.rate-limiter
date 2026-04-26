@@ -656,3 +656,12 @@ class TestEcsStack(unittest.TestCase):
                 "Description": "Public HTTPS endpoint for the rate limiter",
             },
         )
+
+    def test_task_sg_id_exported_to_ssm(self):
+        self.template.has_resource_properties(
+            "AWS::SSM::Parameter",
+            {
+                "Name": "/hf-ml-platform/rate-limiter/task-sg-id",
+                "Type": "String",
+            },
+        )
