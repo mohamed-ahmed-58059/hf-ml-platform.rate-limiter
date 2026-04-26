@@ -80,6 +80,13 @@ class EcsStack(cdk.Stack):
             description="Forwarded traffic from the rate limiter ALB",
         )
 
+        ssm.StringParameter(
+            self,
+            "RateLimiterTaskSgIdParam",
+            parameter_name="/hf-ml-platform/rate-limiter/task-sg-id",
+            string_value=sg_rate_limiter.security_group_id,
+        )
+
         execution_role = iam.Role(
             self,
             "ExecutionRole",
