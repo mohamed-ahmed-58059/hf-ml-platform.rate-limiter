@@ -20,25 +20,34 @@ class TestEcsStack(unittest.TestCase):
             "AWS::EC2::SecurityGroup",
             {
                 "GroupName": "hf-ml-platform-rate-limiter-alb",
-                "GroupDescription": "Allows inbound HTTP on port 80 from the internet and internal VPC traffic on port 8080",
+                "GroupDescription": "Port 80 from CloudFront origin-facing IPs only; port 8080 from VPC for internal service-to-service traffic",
             },
         )
 
-    def test_alb_sg_allows_port_80_from_internet(self):
+    def test_alb_sg_allows_port_80_from_cloudfront_only(self):
         self.template.has_resource_properties(
-            "AWS::EC2::SecurityGroup",
+            "AWS::EC2::SecurityGroupIngress",
             {
-                "GroupName": "hf-ml-platform-rate-limiter-alb",
-                "SecurityGroupIngress": Match.array_with([
-                    Match.object_like({
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0",
-                    })
-                ]),
+                "IpProtocol": "tcp",
+                "FromPort": 80,
+                "ToPort": 80,
+                "SourcePrefixListId": "pl-3b927c52",
             },
         )
+
+    def test_alb_sg_does_not_allow_port_80_from_internet(self):
+        sgs = self.template.find_resources(
+            "AWS::EC2::SecurityGroup",
+            {"Properties": {"GroupName": "hf-ml-platform-rate-limiter-alb"}},
+        )
+        for sg in sgs.values():
+            for rule in sg["Properties"].get("SecurityGroupIngress", []):
+                if rule.get("FromPort") == 80:
+                    self.assertNotEqual(
+                        rule.get("CidrIp"),
+                        "0.0.0.0/0",
+                        "ALB port 80 must not be open to the internet — CloudFront prefix list only",
+                    )
 
     def test_alb_sg_allows_port_8080_from_vpc(self):
         self.template.has_resource_properties(
@@ -61,7 +70,7 @@ class TestEcsStack(unittest.TestCase):
             "AWS::EC2::SecurityGroup",
             {
                 "GroupName": "hf-ml-platform-rate-limiter-tasks",
-                "GroupDescription": "Allows inbound traffic on port 3000 from the rate limiter ALB only",
+                "GroupDescription": "Port 3000 from the rate limiter ALB SG only",
             },
         )
 
@@ -544,3 +553,106 @@ class TestEcsStack(unittest.TestCase):
         for sg in sgs.values():
             for rule in sg["Properties"].get("SecurityGroupIngress", []):
                 self.assertNotEqual(rule.get("IpProtocol"), "-1")
+
+    def test_container_trusted_proxy_hops(self):
+        self.template.has_resource_properties(
+            "AWS::ECS::TaskDefinition",
+            {
+                "ContainerDefinitions": Match.array_with([
+                    Match.object_like({
+                        "Environment": Match.array_with([
+                            Match.object_like({"Name": "TRUSTED_PROXY_HOPS", "Value": "2"})
+                        ])
+                    })
+                ])
+            },
+        )
+
+    def test_external_listener_blocks_internal_paths(self):
+        self.template.has_resource_properties(
+            "AWS::ElasticLoadBalancingV2::ListenerRule",
+            {
+                "Priority": 1,
+                "Conditions": Match.array_with([
+                    Match.object_like({
+                        "Field": "path-pattern",
+                        "PathPatternConfig": {"Values": ["/internal/*"]},
+                    })
+                ]),
+                "Actions": Match.array_with([
+                    Match.object_like({
+                        "Type": "fixed-response",
+                        "FixedResponseConfig": Match.object_like({
+                            "StatusCode": "404",
+                            "ContentType": "application/json",
+                        }),
+                    })
+                ]),
+            },
+        )
+
+    def test_cloudfront_distribution_exists(self):
+        self.template.resource_count_is("AWS::CloudFront::Distribution", 1)
+
+    def test_cloudfront_redirects_http_to_https(self):
+        self.template.has_resource_properties(
+            "AWS::CloudFront::Distribution",
+            {
+                "DistributionConfig": Match.object_like({
+                    "DefaultCacheBehavior": Match.object_like({
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                    })
+                })
+            },
+        )
+
+    def test_cloudfront_caching_disabled(self):
+        # Managed CachingDisabled policy ID
+        self.template.has_resource_properties(
+            "AWS::CloudFront::Distribution",
+            {
+                "DistributionConfig": Match.object_like({
+                    "DefaultCacheBehavior": Match.object_like({
+                        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+                    })
+                })
+            },
+        )
+
+    def test_cloudfront_forwards_all_viewer_request(self):
+        # Managed AllViewer origin request policy ID
+        self.template.has_resource_properties(
+            "AWS::CloudFront::Distribution",
+            {
+                "DistributionConfig": Match.object_like({
+                    "DefaultCacheBehavior": Match.object_like({
+                        "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+                    })
+                })
+            },
+        )
+
+    def test_cloudfront_origin_is_http_only(self):
+        self.template.has_resource_properties(
+            "AWS::CloudFront::Distribution",
+            {
+                "DistributionConfig": Match.object_like({
+                    "Origins": Match.array_with([
+                        Match.object_like({
+                            "CustomOriginConfig": Match.object_like({
+                                "OriginProtocolPolicy": "http-only",
+                                "HTTPPort": 80,
+                            })
+                        })
+                    ])
+                })
+            },
+        )
+
+    def test_cloudfront_domain_output_exists(self):
+        self.template.has_output(
+            "CloudFrontDomain",
+            {
+                "Description": "Public HTTPS endpoint for the rate limiter",
+            },
+        )
