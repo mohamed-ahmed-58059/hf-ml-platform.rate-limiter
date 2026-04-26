@@ -51,19 +51,19 @@ class EcsStack(cdk.Stack):
             "AlbSg",
             vpc=vpc,
             security_group_name="hf-ml-platform-rate-limiter-alb",
-            description="Allows inbound HTTP on port 80 from the internet and internal VPC traffic on port 8080",
+            description="Port 80 from CloudFront origin-facing IPs only; port 8080 from VPC for internal service-to-service traffic",
         )
 
         sg_alb.add_ingress_rule(
             peer=ec2.Peer.prefix_list(CLOUDFRONT_ORIGIN_PREFIX_LIST_ID),
             connection=ec2.Port.tcp(80),
-            description="Allow HTTP from CloudFront origin-facing IPs only",
+            description="Public traffic via CloudFront origin-facing IPs",
         )
 
         sg_alb.add_ingress_rule(
             peer=ec2.Peer.ipv4("10.0.0.0/16"),
             connection=ec2.Port.tcp(8080),
-            description="Allow internal traffic from VPC",
+            description="Internal VPC traffic for service-to-service calls",
         )
 
         sg_rate_limiter = ec2.SecurityGroup(
@@ -71,13 +71,13 @@ class EcsStack(cdk.Stack):
             "RateLimiterSg",
             vpc=vpc,
             security_group_name="hf-ml-platform-rate-limiter-tasks",
-            description="Allows inbound traffic on port 3000 from the rate limiter ALB only",
+            description="Port 3000 from the rate limiter ALB SG only",
         )
 
         sg_rate_limiter.add_ingress_rule(
             peer=sg_alb,
             connection=ec2.Port.tcp(3000),
-            description="Allow traffic from ALB",
+            description="Forwarded traffic from the rate limiter ALB",
         )
 
         execution_role = iam.Role(
@@ -257,11 +257,15 @@ class EcsStack(cdk.Stack):
 
         self.service.attach_to_application_target_group(self.target_group)
 
+        # open=False is critical: CDK's add_listener defaults to open=True, which
+        # adds a 0.0.0.0/0 ingress rule on the listener port and silently overrides
+        # the prefix-list lockdown above. We manage SG ingress explicitly.
         external_listener = self.alb.add_listener(
             "ExternalListener",
             port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
             default_target_groups=[self.target_group],
+            open=False,
         )
 
         external_listener.add_action(
